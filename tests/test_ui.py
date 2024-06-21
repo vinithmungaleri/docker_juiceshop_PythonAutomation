@@ -1,3 +1,5 @@
+import time
+
 from selenium import webdriver
 import pytest
 from selenium.webdriver.chrome.options import Options
@@ -91,6 +93,7 @@ def test_add_card_details(setup):
     expiry_year = Select(card_expiry_dropdown[1])
 
     print("Entering Card Details")
+    wait.until(EC.element_to_be_clickable(name))
     name.send_keys("Vinith Mungaleri")
     card_no.send_keys("1234123412341234")
     expiry_month.select_by_value("8")
@@ -106,20 +109,32 @@ def test_add_card_details(setup):
 def test_api_add_unique_card():
     api_url = "http://localhost:3000/api/Cards"
     new_card = {
-        'cardNum': 1111111111112001,
-        'expMonth': "9",
-        'expYear': "2080",
+        'cardNum': "1111111111112001",
+        'expMonth': 9,
+        'expYear': 2080,
         "fullName": "test_card"
     }
 
     existing_cards = get_cards(api_url)
     if existing_cards:
-        for i in range(0, len(existing_cards)):
-            print("Card no :{}".format(i))
-            print(existing_cards[i])
-            print()
+        if verify_new_card(existing_cards, new_card):
+            post_card(api_url, new_card)
+        else:
+            print("Card Already Exists")
+    else:
+        print("No Existing cards found")
+        post_card(api_url, new_card)
 
-    post_card(api_url, new_card)
+
+def verify_new_card(existing_cards, new_card):
+    for existing_card in existing_cards:
+        existing_card_name = existing_card['fullName']
+        existing_card_no = existing_card['cardNum']
+        existing_card_month = existing_card['expMonth']
+        existing_card_year = existing_card['expYear']
+        if existing_card_no[-4:-1] == new_card['cardNum'][-4:-1] and new_card['expMonth'] == existing_card_month and new_card['expYear'] == existing_card_year and existing_card_name == new_card['fullName']:
+            return False
+    return True
 
 
 def get_cards(url):
@@ -131,8 +146,6 @@ def get_cards(url):
     response = requests.get(url, headers=headers)
     if response.status_code == 200 and response.json()["status"] == "success":
         existing_cards = response.json()["data"]
-        print("Existing Cards:")
-        print(existing_cards)
         return existing_cards
     else:
         print("Request to GET Failed with status code", str(response.status_code) + str(response.json()))
@@ -147,7 +160,8 @@ def post_card(url, card_json):
 
     response = requests.post(url, headers=headers, json=card_json)
     if response.status_code == 201 and response.json()["status"] == "success":
-        print("Card added successfully:")
+        print("New card added successfully:")
         print(response.json()["data"])
     else:
-        print("Failed to add card with status code", response.status_code, response.json())
+        print("Failed to add card with status code", response.status_code)
+        print("Error:", response.json())
