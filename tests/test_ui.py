@@ -30,10 +30,8 @@ def setup():
 
     options = Options()
     options.add_argument('--start-maximized')
-    options.add_argument('--disable-notifications')
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-popup-blocking")
+    options.add_argument("--disable-notifications")
+    options.add_experimental_option("prefs", {"profile.default_content_setting_values.notifications": 2})
 
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 10)
@@ -116,11 +114,10 @@ def test_add_card_details(setup):
     name.send_keys("Vinith Mungaleri")
     card_no.send_keys("1234123412341234")
     expiry_month.select_by_value("8")
-    card_expiry_dropdown[1].click()
-    card_expiry_dropdown[1].send_keys(Keys.DOWN)
-    card_expiry_dropdown[1].click()
-
+    expiry_year.select_by_index(1)
     print("Entered Card Details")
+
+    actions.move_to_element(driver.find_element(By.ID, 'submitButton')).perform()
     wait.until(EC.element_to_be_clickable((By.ID, 'submitButton'))).click()
     print("Submitted New Card")
 
