@@ -2,6 +2,7 @@ import time
 
 from selenium import webdriver
 import pytest
+from selenium.common import NoSuchElementException, StaleElementReferenceException
 from selenium.webdriver.chrome.options import Options
 import json
 from selenium.webdriver.support.select import Select
@@ -30,6 +31,10 @@ def setup():
     options = Options()
     options.add_argument('--start-maximized')
     options.add_argument('--disable-notifications')
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-popup-blocking")
+
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 10)
     driver.get(base_url)
@@ -38,8 +43,11 @@ def setup():
         EC.visibility_of_element_located((By.XPATH, "//button[contains(@class, 'close-dialog')]")))
     dismiss_container_btn.click()
 
-    accept_cookies = driver.find_element(By.XPATH, "//a[text()='Me want it!']")
-    accept_cookies.click()
+    try:
+        accept_cookies = driver.find_element(By.XPATH, "//a[text()='Me want it!']")
+        accept_cookies.click()
+    except NoSuchElementException:
+        pass
 
     nav_account = driver.find_element(By.ID, "navbarAccount")
     nav_account.click()
@@ -56,12 +64,10 @@ def setup():
     login_pwd.send_keys(login_pwd_value)
     login_btn = wait.until(EC.element_to_be_clickable((By.ID, 'loginButton')))
     login_btn.click()
-    nav_account = wait.until(EC.presence_of_element_located((By.ID, 'navbarAccount')))
-    nav_account.click()
-
+    wait.until(EC.visibility_of_element_located((By.ID, 'navbarAccount'))).click()
     logout_btn = wait.until(EC.visibility_of_element_located((By.ID, 'navbarLogoutButton')))
-    print("Logged In...")
     assert logout_btn.is_displayed()
+    print("Logged In...")
     yield driver
     driver.quit()
 
@@ -69,17 +75,30 @@ def setup():
 def test_add_card_details(setup):
     driver = setup
     wait = WebDriverWait(driver, 10)
+    actions = ActionChains(driver)
+    # driver.refresh()
 
-    driver.refresh()  # To handle stale element exception
-    wait.until(EC.element_to_be_clickable((By.ID, 'navbarAccount')))
-    actions = ActionChains(driver)  # To handle Element click interception exception
-    nav_account = driver.find_element(By.ID, "navbarAccount")
-    actions.move_to_element(nav_account).click().perform()
-    wait.until(
-        EC.visibility_of_element_located((By.XPATH, "//button[@aria-label='Show Orders and Payment Menu']"))).click()
-    wait.until(
-        EC.visibility_of_element_located(
+    def go_to_payments(wait):
+        """
+        This handles stale element exception. The Account dropdown disappears which results in stale exception. When this happens, Just open
+        the dropdown again and perform next actions.
+        :param wait:
+        :return:
+        """
+        wait.until(EC.element_to_be_clickable((By.ID, 'navbarAccount')))
+        element = driver.find_element(By.ID, 'navbarAccount')
+        actions.move_to_element(element).perform()
+        actions.click(element).perform()
+
+        wait.until(EC.visibility_of_element_located(
+            (By.XPATH, "//button[@aria-label='Show Orders and Payment Menu']"))).click()
+        wait.until(EC.visibility_of_element_located(
             (By.XPATH, "//button[@aria-label='Go to saved payment methods page']"))).click()
+
+    try:
+        go_to_payments(wait)
+    except StaleElementReferenceException:
+        go_to_payments(wait)
 
     assert driver.current_url == "http://localhost:3000/#/saved-payment-methods"
     print("Entered Payment Methods Page")
@@ -104,6 +123,18 @@ def test_add_card_details(setup):
     print("Entered Card Details")
     wait.until(EC.element_to_be_clickable((By.ID, 'submitButton'))).click()
     print("Submitted New Card")
+
+
+def handle_staleElement_click(wait, xpath, max_try=1):
+    tries = 0
+    while tries <= max_try:
+        try:
+            element = wait.until(
+                EC.visibility_of_element_located((By.XPATH, xpath)))
+            element.click()
+        except StaleElementReferenceException:
+            tries += 1
+            time.sleep(1)
 
 
 def test_api_add_unique_card():
