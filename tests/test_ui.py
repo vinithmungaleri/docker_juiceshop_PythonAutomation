@@ -1,5 +1,4 @@
 import time
-
 from selenium import webdriver
 import pytest
 from selenium.common import NoSuchElementException, StaleElementReferenceException
@@ -8,9 +7,10 @@ import json
 from selenium.webdriver.support.select import Select
 from selenium.webdriver import ActionChains, Keys
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 import requests
+import pandas as pd
 
 
 @pytest.fixture(scope='function')
@@ -31,14 +31,21 @@ def setup():
     options = Options()
     options.add_argument('--start-maximized')
     options.add_argument("--disable-notifications")
-    options.add_experimental_option("prefs", {"profile.default_content_setting_values.notifications": 2})
+    options.add_argument("--disable-extensions")
+    options.add_argument("disable-infobars")
+    prefs = {
+        "credentials_enable_service": False,
+        "profile.password_manager_enabled": False
+    }
+    options.add_experimental_option("prefs", prefs)
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
 
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 10)
     driver.get(base_url)
     print("Entered into site:", base_url)
     dismiss_container_btn = wait.until(
-        EC.visibility_of_element_located((By.XPATH, "//button[contains(@class, 'close-dialog')]")))
+        ec.visibility_of_element_located((By.XPATH, "//button[contains(@class, 'close-dialog')]")))
     dismiss_container_btn.click()
 
     try:
@@ -49,7 +56,7 @@ def setup():
 
     nav_account = driver.find_element(By.ID, "navbarAccount")
     nav_account.click()
-    nav_login_btn = wait.until(EC.element_to_be_clickable((By.ID, "navbarLoginButton")))
+    nav_login_btn = wait.until(ec.element_to_be_clickable((By.ID, "navbarLoginButton")))
     nav_login_btn.click()
 
     print("Redirecting to Login Page")
@@ -60,11 +67,9 @@ def setup():
     login_email.send_keys(login_email_value)
     login_pwd = driver.find_element(By.ID, 'password')
     login_pwd.send_keys(login_pwd_value)
-    login_btn = wait.until(EC.element_to_be_clickable((By.ID, 'loginButton')))
+    login_btn = wait.until(ec.element_to_be_clickable((By.ID, 'loginButton')))
     login_btn.click()
-    wait.until(EC.visibility_of_element_located((By.ID, 'navbarAccount'))).click()
-    logout_btn = wait.until(EC.visibility_of_element_located((By.ID, 'navbarLogoutButton')))
-    assert logout_btn.is_displayed()
+    wait.until(ec.visibility_of_element_located((By.XPATH, "//button[@aria-label='Show the shopping cart']")))
     print("Logged In...")
     yield driver
     driver.quit()
@@ -74,29 +79,12 @@ def test_add_card_details(setup):
     driver = setup
     wait = WebDriverWait(driver, 10)
     actions = ActionChains(driver)
-    # driver.refresh()
 
-    def go_to_payments(wait):
-        """
-        This handles stale element exception. The Account dropdown disappears which results in stale exception. When this happens, Just open
-        the dropdown again and perform next actions.
-        :param wait:
-        :return:
-        """
-        wait.until(EC.element_to_be_clickable((By.ID, 'navbarAccount')))
-        element = driver.find_element(By.ID, 'navbarAccount')
-        actions.move_to_element(element).perform()
-        actions.click(element).perform()
-
-        wait.until(EC.visibility_of_element_located(
-            (By.XPATH, "//button[@aria-label='Show Orders and Payment Menu']"))).click()
-        wait.until(EC.visibility_of_element_located(
-            (By.XPATH, "//button[@aria-label='Go to saved payment methods page']"))).click()
-
-    try:
-        go_to_payments(wait)
-    except StaleElementReferenceException:
-        go_to_payments(wait)
+    wait.until(ec.element_to_be_clickable((By.ID, 'navbarAccount'))).click()
+    wait.until(ec.visibility_of_element_located(
+        (By.XPATH, "//button[@aria-label='Show Orders and Payment Menu']"))).click()
+    wait.until(ec.visibility_of_element_located(
+        (By.XPATH, "//button[@aria-label='Go to saved payment methods page']"))).click()
 
     assert driver.current_url == "http://localhost:3000/#/saved-payment-methods"
     print("Entered Payment Methods Page")
@@ -110,28 +98,60 @@ def test_add_card_details(setup):
     expiry_year = Select(card_expiry_dropdown[1])
 
     print("Entering Card Details")
-    wait.until(EC.element_to_be_clickable(name))
+    wait.until(ec.element_to_be_clickable(name))
     name.send_keys("Vinith Mungaleri")
     card_no.send_keys("1234123412341234")
     expiry_month.select_by_value("8")
-    expiry_year.select_by_index(1)
+    expiry_year.select_by_value("2080")
     print("Entered Card Details")
 
     actions.move_to_element(driver.find_element(By.ID, 'submitButton')).perform()
-    wait.until(EC.element_to_be_clickable((By.ID, 'submitButton'))).click()
+    wait.until(ec.element_to_be_clickable((By.ID, 'submitButton'))).click()
     print("Submitted New Card")
 
 
-def handle_staleElement_click(wait, xpath, max_try=1):
-    tries = 0
-    while tries <= max_try:
-        try:
-            element = wait.until(
-                EC.visibility_of_element_located((By.XPATH, xpath)))
-            element.click()
-        except StaleElementReferenceException:
-            tries += 1
-            time.sleep(1)
+def test_add_to_cart(setup):
+    driver = setup
+    wait = WebDriverWait(driver, 10)
+    add_btn_path = "//button//span[text()='Add to Basket']"
+    wait.until(ec.visibility_of_all_elements_located((By.XPATH, add_btn_path)))
+    add_cart_buttons = driver.find_elements(By.XPATH, add_btn_path)
+    last_btn = add_cart_buttons[9]
+    actions = ActionChains(driver)
+    actions.move_to_element(last_btn).click().perform()
+    cart_xpath = "//button[@aria-label='Show the shopping cart']//span[text()=' Your Basket']/following-sibling::span"
+    actions.move_to_element(driver.find_element(By.XPATH, cart_xpath)).perform()
+    cart_count = driver.find_element(By.XPATH, cart_xpath).text
+    assert cart_count == "1"
+
+
+def test_get_all_products(setup):
+    driver = setup
+    wait = WebDriverWait(driver, 10)
+
+    item_name_path = "//div[@class='item-name']"
+    item_price_path = "//div[@class='item-price']"
+    prev_page_btn_path = "//button[@aria-label='Previous page']"
+    next_page_btn_path = "//button[@aria-label='Next page']"
+
+    prev_page_btn = driver.find_element(By.XPATH, prev_page_btn_path)
+    next_page_btn = driver.find_element(By.XPATH, next_page_btn_path)
+
+    product_details = {}
+    while True:
+        item_names = wait.until(ec.presence_of_all_elements_located((By.XPATH, item_name_path)))
+        item_prices = wait.until(ec.presence_of_all_elements_located((By.XPATH, item_price_path)))
+        for i in range(0, len(item_names)):
+            product_details[item_names[i].text] = item_prices[i].text
+
+        next_page_btn = driver.find_element(By.XPATH, next_page_btn_path)
+        if next_page_btn.is_enabled():
+            next_page_btn.click()
+        else:
+            break
+
+    print("Total products found:", len(product_details))
+    print(product_details)
 
 
 def test_api_add_unique_card():
