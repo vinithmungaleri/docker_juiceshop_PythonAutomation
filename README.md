@@ -16,7 +16,7 @@ application is up and running.
 
 Please manually register a user in JuiceShop application. Update your credentials in config.json.
 
-**Scenarios covered: **
+- **Scenarios covered:**
 Scenario 1: Manually create a new user and add their credentials to the config.json file. Then create a
 login script in the setup fixture to login every time a test runs.
 
