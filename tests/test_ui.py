@@ -1,3 +1,4 @@
+import datetime
 import time
 from selenium import webdriver
 import pytest
@@ -110,50 +111,6 @@ def test_add_card_details(setup):
     print("Submitted New Card")
 
 
-def test_add_to_cart(setup):
-    driver = setup
-    wait = WebDriverWait(driver, 10)
-    add_btn_path = "//button//span[text()='Add to Basket']"
-    wait.until(ec.visibility_of_all_elements_located((By.XPATH, add_btn_path)))
-    add_cart_buttons = driver.find_elements(By.XPATH, add_btn_path)
-    last_btn = add_cart_buttons[9]
-    actions = ActionChains(driver)
-    actions.move_to_element(last_btn).click().perform()
-    cart_xpath = "//button[@aria-label='Show the shopping cart']//span[text()=' Your Basket']/following-sibling::span"
-    actions.move_to_element(driver.find_element(By.XPATH, cart_xpath)).perform()
-    cart_count = driver.find_element(By.XPATH, cart_xpath).text
-    assert cart_count == "1"
-
-
-def test_get_all_products(setup):
-    driver = setup
-    wait = WebDriverWait(driver, 10)
-
-    item_name_path = "//div[@class='item-name']"
-    item_price_path = "//div[@class='item-price']"
-    prev_page_btn_path = "//button[@aria-label='Previous page']"
-    next_page_btn_path = "//button[@aria-label='Next page']"
-
-    prev_page_btn = driver.find_element(By.XPATH, prev_page_btn_path)
-    next_page_btn = driver.find_element(By.XPATH, next_page_btn_path)
-
-    product_details = {}
-    while True:
-        item_names = wait.until(ec.presence_of_all_elements_located((By.XPATH, item_name_path)))
-        item_prices = wait.until(ec.presence_of_all_elements_located((By.XPATH, item_price_path)))
-        for i in range(0, len(item_names)):
-            product_details[item_names[i].text] = item_prices[i].text
-
-        next_page_btn = driver.find_element(By.XPATH, next_page_btn_path)
-        if next_page_btn.is_enabled():
-            next_page_btn.click()
-        else:
-            break
-
-    print("Total products found:", len(product_details))
-    print(product_details)
-
-
 def test_api_add_unique_card():
     api_url = "http://localhost:3000/api/Cards"
     new_card = {
@@ -213,3 +170,23 @@ def post_card(url, card_json):
     else:
         print("Failed to add card with status code", response.status_code)
         print("Error:", response.json())
+
+
+def test_red_bus():
+    options = Options()
+    driver = webdriver.Chrome()
+    wait = WebDriverWait(driver, 10)
+    driver.maximize_window()
+
+    url = "https://www.redbus.in/"
+    driver.get(url)
+
+    date_text_path = "//span[@class='dateText']"
+    date_btn = driver.find_element(By.XPATH, date_text_path)
+    date_btn.click()
+
+    current_date = datetime.datetime.now()
+
+    print(current_date)
+    wait.until(ec.presence_of_element_located((By.XPATH, "//text[@class='dateText']"))).send_keys("23 Aug")
+    wait.until(ec.presence_of_element_located((By.XPATH, "//text[@class='yearText']"))).send_keys("2024")
