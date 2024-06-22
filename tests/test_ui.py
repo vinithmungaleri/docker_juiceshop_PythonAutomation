@@ -174,19 +174,18 @@ def post_card(url, card_json):
 
 def test_red_bus():
     options = Options()
+    options.add_argument("--headless")
     driver = webdriver.Chrome()
     wait = WebDriverWait(driver, 10)
-    driver.maximize_window()
 
     url = "https://www.redbus.in/"
     driver.get(url)
+    current_date = datetime.datetime.now()
 
     date_text_path = "//span[@class='dateText']"
     date_btn = driver.find_element(By.XPATH, date_text_path)
     date_btn.click()
-
-    current_date = datetime.datetime.now()
-
-    print(current_date)
-    wait.until(ec.presence_of_element_located((By.XPATH, "//text[@class='dateText']"))).send_keys("23 Aug")
-    wait.until(ec.presence_of_element_located((By.XPATH, "//text[@class='yearText']"))).send_keys("2024")
+    dates_path = f"//span[contains(@class, 'DayTiles__CalendarDays') and contains(text(), '{current_date.day}')]"
+    wait.until(ec.visibility_of_element_located((By.XPATH, dates_path))).click()
+    date = wait.until(ec.visibility_of_element_located((By.XPATH, "//text[@class='dateText']")))
+    assert str(current_date.day) in date.text
